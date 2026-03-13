@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"os"
-	"os/signal"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -26,19 +28,44 @@ func main() {
 	}
 	defer chann.Close()
 
-	// data, err := json.Marshal(routing.PlayingState{
-	// 	IsPaused: true,
-	// })
-	// if err != nil {
-	// 	fmt.Println("failed to marshal data:", err)
-	// 	return
-	// }
+	gamelogic.PrintServerHelp()
 
-	// pubsub.PublishJSON(chann, routing.ExchangePerilDirect, routing.PauseKey, data)
+	for {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
 
-	// wait for a signal
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Println("Closing Peril server")
+		switch words[0] {
+		case "pause":
+			fmt.Println("sending pause message")
+			data, err := json.Marshal(routing.PlayingState{
+				IsPaused: true,
+			})
+			if err != nil {
+				fmt.Println("failed to marshal data:", err)
+				return
+			}
+
+			pubsub.PublishJSON(chann, routing.ExchangePerilDirect, routing.PauseKey, data)
+
+		case "resume":
+			fmt.Println("sending resume message")
+			data, err := json.Marshal(routing.PlayingState{
+				IsPaused: false,
+			})
+			if err != nil {
+				fmt.Println("failed to marshal data:", err)
+				return
+			}
+
+			pubsub.PublishJSON(chann, routing.ExchangePerilDirect, routing.PauseKey, data)
+
+		case "quit":
+			fmt.Println("Closing Peril server")
+			return
+		default:
+			fmt.Printf("command '%s' not recognized\n", words[0])
+		}
+	}
 }
