@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -36,8 +34,43 @@ func main() {
 		return
 	}
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Println("Closing Peril client")
+	state := gamelogic.NewGameState(user)
+
+	for {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+
+		switch words[0] {
+		case "spawn":
+			err := state.CommandSpawn(words)
+			if err != nil {
+				fmt.Println("failed to spawn units: ", err)
+				continue
+			}
+
+		case "move":
+			_, err := state.CommandMove(words)
+			if err != nil {
+				fmt.Println("failed to move units: ", err)
+				continue
+			}
+
+		case "status":
+			state.CommandStatus()
+
+		case "help":
+			gamelogic.PrintClientHelp()
+
+		case "spam":
+			fmt.Println("spamming is not allowed yet!")
+
+		case "quit":
+			gamelogic.PrintQuit()
+			return
+		default:
+			fmt.Printf("command '%s' not recognized\n", words[0])
+		}
+	}
 }
