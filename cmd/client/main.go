@@ -27,10 +27,26 @@ func main() {
 		return
 	}
 
+	chann, err := conn.Channel()
+	if err != nil {
+		fmt.Println("failed to create channel:", err)
+		return
+	}
+
 	state := gamelogic.NewGameState(user)
 
+	// subscribe to pause queue
 	queueName := fmt.Sprintf("%s.%s", routing.PauseKey, user)
 	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilDirect, queueName, routing.PauseKey, pubsub.TransientQueue, handlerPause(state))
+	if err != nil {
+		fmt.Println("failed to subscribe to queue:", err)
+		return
+	}
+
+	// subscribe to the move queue
+	queueName = fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, user)
+	routingKey := fmt.Sprintf("%s.*", routing.ArmyMovesPrefix)
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, queueName, routingKey, pubsub.TransientQueue, handlerMove(state))
 	if err != nil {
 		fmt.Println("failed to subscribe to queue:", err)
 		return
@@ -51,11 +67,18 @@ func main() {
 			}
 
 		case "move":
-			_, err := state.CommandMove(words)
+			move, err := state.CommandMove(words)
 			if err != nil {
 				fmt.Println("failed to move units: ", err)
 				continue
 			}
+
+			err = pubsub.PublishJSON(chann, routing.ExchangePerilTopic, routingKey, move)
+			if err != nil {
+				fmt.Println("failed to publish move message:", err)
+				return
+			}
+			fmt.Println("Move published ok!")
 
 		case "status":
 			state.CommandStatus()
