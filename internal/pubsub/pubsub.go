@@ -21,10 +21,58 @@ func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 		return err
 	}
 
-	ch.PublishWithContext(context.Background(), exchange, key, false, false, amqp.Publishing{
+	return ch.PublishWithContext(context.Background(), exchange, key, false, false, amqp.Publishing{
 		ContentType: "application/json",
 		Body:        data,
 	})
+}
+
+func SubscribeJSON[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
+	handler func(T),
+) error {
+	// create (if the queue doest exist yet) and bind to the queue
+	chann, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		fmt.Println("failed to declare/bind to queue: ", err)
+		return err
+	}
+
+	// consume from the channel
+	deliveryChannel, err := chann.Consume(queue.Name, "", false, false, false, false, nil)
+	if err != nil {
+		fmt.Println("failed to consume messages from channel")
+		return err
+	}
+
+	unmarshaller := func(body []byte) (T, error) {
+		var data T
+		err := json.Unmarshal(body, &data)
+		return data, err
+	}
+
+	go func() {
+		defer chann.Close()
+		// process messages in the channel
+		for msg := range deliveryChannel {
+			data, err := unmarshaller(msg.Body)
+			if err != nil {
+				fmt.Println("failed to unmarshal message: ", err)
+				continue
+			}
+
+			// callback with unmarshaled data
+			handler(data)
+
+			// ack message to delete it from the queue
+			msg.Ack(false)
+		}
+	}()
+
 	return nil
 }
 
@@ -40,7 +88,6 @@ func DeclareAndBind(
 		fmt.Println("failed to open a channel:", err)
 		return nil, amqp.Queue{}, err
 	}
-	defer chann.Close()
 
 	durable := queueType == DurableQueue
 	queue, err := chann.QueueDeclare(queueName, durable, !durable, !durable, false, nil)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
@@ -46,27 +45,23 @@ func main() {
 		switch words[0] {
 		case "pause":
 			fmt.Println("sending pause message")
-			data, err := json.Marshal(routing.PlayingState{
+			err := pubsub.PublishJSON(chann, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
 				IsPaused: true,
 			})
 			if err != nil {
-				fmt.Println("failed to marshal data:", err)
+				fmt.Println("failed to publish message:", err)
 				return
 			}
-
-			pubsub.PublishJSON(chann, routing.ExchangePerilDirect, routing.PauseKey, data)
 
 		case "resume":
 			fmt.Println("sending resume message")
-			data, err := json.Marshal(routing.PlayingState{
+			err := pubsub.PublishJSON(chann, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
 				IsPaused: false,
 			})
 			if err != nil {
-				fmt.Println("failed to marshal data:", err)
+				fmt.Println("failed to publish message:", err)
 				return
 			}
-
-			pubsub.PublishJSON(chann, routing.ExchangePerilDirect, routing.PauseKey, data)
 
 		case "quit":
 			fmt.Println("Closing Peril server")
