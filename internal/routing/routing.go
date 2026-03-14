@@ -14,3 +14,16 @@ const (
 	ExchangePerilDirect = "peril_direct"
 	ExchangePerilTopic  = "peril_topic"
 )
+
+const (
+	DeadLetterExchange = "peril_dlx"
+	DeadLetterQueue    = "peril_dlq"
+)
+
+type AckType int
+
+const (
+	Ack AckType = iota
+	NackRequeue
+	NackDiscard
+)

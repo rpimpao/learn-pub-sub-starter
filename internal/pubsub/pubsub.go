@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 )
 
 type SimpleQueueType int
@@ -33,7 +35,7 @@ func SubscribeJSON[T any](
 	queueName,
 	key string,
 	queueType SimpleQueueType, // an enum to represent "durable" or "transient"
-	handler func(T),
+	handler func(T) routing.AckType,
 ) error {
 	// create (if the queue doest exist yet) and bind to the queue
 	chann, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
@@ -66,10 +68,19 @@ func SubscribeJSON[T any](
 			}
 
 			// callback with unmarshaled data
-			handler(data)
+			ackType := handler(data)
 
-			// ack message to delete it from the queue
-			msg.Ack(false)
+			switch ackType {
+			case routing.Ack:
+				fmt.Println("Ack msg")
+				msg.Ack(false)
+			case routing.NackRequeue:
+				fmt.Println("NackRequeue msg")
+				msg.Nack(false, true)
+			case routing.NackDiscard:
+				fmt.Println("NackDiscard msg")
+				msg.Nack(false, false)
+			}
 		}
 	}()
 
@@ -90,7 +101,9 @@ func DeclareAndBind(
 	}
 
 	durable := queueType == DurableQueue
-	queue, err := chann.QueueDeclare(queueName, durable, !durable, !durable, false, nil)
+	queue, err := chann.QueueDeclare(queueName, durable, !durable, !durable, false, amqp.Table{
+		"x-dead-letter-exchange": routing.DeadLetterExchange,
+	})
 	if err != nil {
 		fmt.Println("failed to declare a queue:", err)
 		return nil, amqp.Queue{}, err
