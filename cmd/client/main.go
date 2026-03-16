@@ -46,7 +46,14 @@ func main() {
 	// subscribe to the move queue
 	queueName = fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, user)
 	routingKey := fmt.Sprintf("%s.*", routing.ArmyMovesPrefix)
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, queueName, routingKey, pubsub.TransientQueue, handlerMove(state))
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, queueName, routingKey, pubsub.TransientQueue, handlerMove(state, chann))
+	if err != nil {
+		fmt.Println("failed to subscribe to queue:", err)
+		return
+	}
+
+	// subscribe to war queue
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix, routing.WarRecognitionsPrefix+".*", pubsub.DurableQueue, handlerRecognitionOfWar(state))
 	if err != nil {
 		fmt.Println("failed to subscribe to queue:", err)
 		return
