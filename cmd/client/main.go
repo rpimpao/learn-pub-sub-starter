@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -53,7 +54,7 @@ func main() {
 	}
 
 	// subscribe to war queue
-	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix, routing.WarRecognitionsPrefix+".*", pubsub.DurableQueue, handlerRecognitionOfWar(state))
+	err = pubsub.SubscribeJSON(conn, routing.ExchangePerilTopic, routing.WarRecognitionsPrefix, routing.WarRecognitionsPrefix+".*", pubsub.DurableQueue, handlerRecognitionOfWar(state, chann))
 	if err != nil {
 		fmt.Println("failed to subscribe to queue:", err)
 		return
@@ -103,4 +104,17 @@ func main() {
 			fmt.Printf("command '%s' not recognized\n", words[0])
 		}
 	}
+}
+
+func publishGameLog(publishCh *amqp.Channel, username, msg string) error {
+	return pubsub.PublishGob(
+		publishCh,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug+"."+username,
+		routing.GameLog{
+			Username:    username,
+			CurrentTime: time.Now(),
+			Message:     msg,
+		},
+	)
 }

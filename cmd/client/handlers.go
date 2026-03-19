@@ -43,17 +43,33 @@ func handlerMove(gs *gamelogic.GameState, chann *amqp.Channel) func(gamelogic.Ar
 	}
 }
 
-func handlerRecognitionOfWar(gs *gamelogic.GameState) func(gamelogic.RecognitionOfWar) routing.AckType {
+func handlerRecognitionOfWar(gs *gamelogic.GameState, chann *amqp.Channel) func(gamelogic.RecognitionOfWar) routing.AckType {
 	return func(rw gamelogic.RecognitionOfWar) routing.AckType {
 		defer fmt.Print("> ")
 
-		outcome, _, _ := gs.HandleWar(rw)
+		outcome, winner, loser := gs.HandleWar(rw)
 		switch outcome {
 		case gamelogic.WarOutcomeNotInvolved:
 			return routing.NackRequeue
 		case gamelogic.WarOutcomeNoUnits:
 			return routing.NackDiscard
-		case gamelogic.WarOutcomeOpponentWon, gamelogic.WarOutcomeYouWon, gamelogic.WarOutcomeDraw:
+		case gamelogic.WarOutcomeOpponentWon, gamelogic.WarOutcomeYouWon:
+			log := winner + " won a war against " + loser
+			err := publishGameLog(chann, gs.GetUsername(), log)
+			if err != nil {
+				fmt.Println("n deu p posta log:", err)
+				return routing.NackRequeue
+			}
+			fmt.Println("deu boassa p posta log")
+			return routing.Ack
+		case gamelogic.WarOutcomeDraw:
+			log := "A war between " + winner + " and " + loser + " resulted in a draw"
+			err := publishGameLog(chann, gs.GetUsername(), log)
+			if err != nil {
+				fmt.Println("n deu p posta log:", err)
+				return routing.NackRequeue
+			}
+			fmt.Println("deu boassa p posta log")
 			return routing.Ack
 		default:
 			fmt.Print("error processing recognition of war, message discarded")
