@@ -48,6 +48,12 @@ func SubscribeGob[T any](
 		return err
 	}
 
+	err = chann.Qos(10, 0, false)
+	if err != nil {
+		fmt.Println("failed to set prefetch")
+		return err
+	}
+
 	// consume from the channel
 	deliveryChannel, err := chann.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {
@@ -67,6 +73,9 @@ func SubscribeGob[T any](
 		defer chann.Close()
 		// process messages in the channel
 		for msg := range deliveryChannel {
+			if msg.ContentType != "application/gob" {
+				continue
+			}
 			data, err := unmarshaller(msg.Body)
 			if err != nil {
 				fmt.Println("failed to unmarshal message: ", err)
