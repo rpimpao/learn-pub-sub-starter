@@ -33,6 +33,66 @@ func PublishGob[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	})
 }
 
+func SubscribeGob[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType,
+	handler func(T) routing.AckType,
+) error {
+	// create (if the queue doest exist yet) and bind to the queue
+	chann, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		fmt.Println("failed to declare/bind to queue: ", err)
+		return err
+	}
+
+	// consume from the channel
+	deliveryChannel, err := chann.Consume(queue.Name, "", false, false, false, false, nil)
+	if err != nil {
+		fmt.Println("failed to consume messages from channel")
+		return err
+	}
+
+	unmarshaller := func(body []byte) (T, error) {
+		buffer := bytes.NewBuffer(body)
+		decoder := gob.NewDecoder(buffer)
+		var data T
+		err := decoder.Decode(&data)
+		return data, err
+	}
+
+	go func() {
+		defer chann.Close()
+		// process messages in the channel
+		for msg := range deliveryChannel {
+			data, err := unmarshaller(msg.Body)
+			if err != nil {
+				fmt.Println("failed to unmarshal message: ", err)
+				continue
+			}
+
+			// callback with unmarshaled data
+			ackType := handler(data)
+
+			switch ackType {
+			case routing.Ack:
+				fmt.Println("Ack msg")
+				msg.Ack(false)
+			case routing.NackRequeue:
+				fmt.Println("NackRequeue msg")
+				msg.Nack(false, true)
+			case routing.NackDiscard:
+				fmt.Println("NackDiscard msg")
+				msg.Nack(false, false)
+			}
+		}
+	}()
+
+	return nil
+}
+
 func PublishJSON[T any](ch *amqp.Channel, exchange, key string, val T) error {
 	data, err := json.Marshal(val)
 	if err != nil {

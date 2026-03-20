@@ -27,7 +27,7 @@ func main() {
 	}
 	defer chann.Close()
 
-	_, _, err = pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.DurableQueue)
+	err = pubsub.SubscribeGob(conn, routing.ExchangePerilTopic, routing.GameLogSlug, routing.GameLogSlug+".*", pubsub.DurableQueue, logHandler)
 	if err != nil {
 		fmt.Println("failed to declare and bind to queue:", err)
 		return
@@ -69,4 +69,14 @@ func main() {
 			fmt.Printf("command '%s' not recognized\n", words[0])
 		}
 	}
+}
+
+func logHandler(gamelog routing.GameLog) routing.AckType {
+	defer fmt.Print("> ")
+
+	err := gamelogic.WriteLog(gamelog)
+	if err != nil {
+		return routing.NackRequeue
+	}
+	return routing.Ack
 }
